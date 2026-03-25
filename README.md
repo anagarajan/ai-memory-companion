@@ -33,8 +33,8 @@ Keys are entered inside the app — never in config files or environment variabl
 ### Option 1 — Run locally (laptop/desktop)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-meco-ai.git
-cd ai-meco-ai
+git clone https://github.com/YOUR_USERNAME/meco-ai.git
+cd meco-ai
 npm install
 npm run dev
 ```
@@ -48,8 +48,8 @@ Open `http://localhost:5173` in your browser.
 Get your own free instance at `*.vercel.app` in under a minute:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-meco-ai.git
-cd ai-meco-ai
+git clone https://github.com/YOUR_USERNAME/meco-ai.git
+cd meco-ai
 npm install -g vercel
 vercel login
 vercel --prod
@@ -201,6 +201,7 @@ Use the **Test key** button in Settings to verify a key is working.
 
 ### Memory Intelligence
 - RAG pipeline: embed → cosine similarity → rerank by recency + confidence → reason
+- Multi-item image support — photos with lists (receipts, whiteboards, to-do lists) split into individual memories, one per line item
 - Duplicate detection (cosine threshold 0.82) with inline warning
 - Smart context chips — surfaces a related memory as you type
 - Scheduled reminders for time-sensitive memories

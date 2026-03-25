@@ -564,35 +564,35 @@ flowchart TD
           <div class="flow-step-num step-purple">3</div>
           <div class="flow-step-body">
             <div class="flow-step-title">Multimodal extraction</div>
-            <div class="flow-step-desc">Audio → Whisper/OS Speech → text. Image → Vision API → text. Text normalized.</div>
+            <div class="flow-step-desc">Audio → Whisper/OS Speech → single text. Image → Vision API → <strong>array of lines</strong>, one per distinct item. Text passed through as-is.</div>
           </div>
         </div>
         <div class="flow-step">
           <div class="flow-step-num step-purple">4</div>
           <div class="flow-step-body">
-            <div class="flow-step-title">Memory extraction (AI)</div>
-            <div class="flow-step-desc">AI classifies <code>memory_type</code>, extracts <code>canonical_text</code>, <code>subject</code>, <code>confidence</code>.</div>
+            <div class="flow-step-title">Split into items (images only)</div>
+            <div class="flow-step-desc">Each line from the Vision response becomes an independent item. A whiteboard with 4 tasks → 4 items processed in parallel. Text and audio always produce 1 item.</div>
           </div>
         </div>
         <div class="flow-step">
           <div class="flow-step-num step-cyan">5</div>
           <div class="flow-step-body">
-            <div class="flow-step-title">Embed &amp; duplicate check</div>
-            <div class="flow-step-desc">Generate 256/1536-dim embedding. Cosine similarity against all active memories. Warn if &gt;0.82.</div>
+            <div class="flow-step-title">Per-item: extract → embed → duplicate check</div>
+            <div class="flow-step-desc">For each item: AI classifies <code>memory_type</code>, <code>canonical_text</code>, <code>confidence</code>. Generate 256/1536-dim embedding. Cosine check against existing memories (warn if &gt;0.82). All items run in parallel via <code>Promise.all</code>.</div>
           </div>
         </div>
         <div class="flow-step">
           <div class="flow-step-num step-green">6</div>
           <div class="flow-step-body">
             <div class="flow-step-title">Persist to IndexedDB</div>
-            <div class="flow-step-desc"><code>memory_items</code> + <code>memory_embeddings</code> written atomically. Previous conflicting memory marked superseded.</div>
+            <div class="flow-step-desc">One <code>memory_item</code> + <code>memory_embedding</code> row per item, all sharing the same <code>message_id</code>. Conflicting memories marked superseded.</div>
           </div>
         </div>
         <div class="flow-step">
           <div class="flow-step-num step-yellow">7</div>
           <div class="flow-step-body">
             <div class="flow-step-title">Confirmation reply</div>
-            <div class="flow-step-desc">Assistant message with success/duplicate/conflict status. UI refreshes.</div>
+            <div class="flow-step-desc">Single item: "Memory saved. Type: … Confidence: …". Multiple items: bulleted list of all saved memories with types and confidence scores.</div>
           </div>
         </div>
       </div>
@@ -1139,13 +1139,13 @@ sequenceDiagram
           <div class="service-item"><div class="service-dot" style="background:var(--accent2)"></div><div class="service-name">anthropicProvider.ts</div><div class="service-desc">3 Anthropic implementations</div><div class="service-lines">142 lines</div></div>
           <div class="service-item"><div class="service-dot" style="background:var(--green)"></div><div class="service-name">localHeuristicProvider.ts</div><div class="service-desc">n-gram embedding + query subject extraction</div><div class="service-lines">115 lines</div></div>
           <div class="service-item"><div class="service-dot" style="background:var(--muted)"></div><div class="service-name">keyValidator.ts</div><div class="service-desc">Live API key test calls</div><div class="service-lines">~30 lines</div></div>
-          <div class="service-item"><div class="service-dot" style="background:var(--muted)"></div><div class="service-name">types.ts</div><div class="service-desc">Provider interfaces</div><div class="service-lines">29 lines</div></div>
+          <div class="service-item"><div class="service-dot" style="background:var(--muted)"></div><div class="service-name">types.ts</div><div class="service-desc">Provider interfaces — <code>ImageExtractionProvider</code> returns <code>Promise&lt;string[]&gt;</code> (one entry per image item)</div><div class="service-lines">29 lines</div></div>
         </div>
       </div>
       <div class="service-group">
         <div class="service-group-title">Memory Services</div>
         <div class="service-list">
-          <div class="service-item"><div class="service-dot" style="background:var(--accent3)"></div><div class="service-name">extractor.ts</div><div class="service-desc">Multimodal → memory creation</div><div class="service-lines">86 lines</div></div>
+          <div class="service-item"><div class="service-dot" style="background:var(--accent3)"></div><div class="service-name">extractor.ts</div><div class="service-desc">Multimodal → N memories (images split per line item via Vision)</div><div class="service-lines">~110 lines</div></div>
           <div class="service-item"><div class="service-dot" style="background:var(--accent3)"></div><div class="service-name">retrievalService.ts</div><div class="service-desc">RAG pipeline + reranking</div><div class="service-lines">135 lines</div></div>
           <div class="service-item"><div class="service-dot" style="background:var(--accent3)"></div><div class="service-name">duplicateDetector.ts</div><div class="service-desc">0.82 cosine threshold check</div><div class="service-lines">26 lines</div></div>
         </div>
