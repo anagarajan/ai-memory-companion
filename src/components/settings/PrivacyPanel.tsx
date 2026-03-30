@@ -9,12 +9,22 @@ interface PrivacyPanelProps {
   onAfterWipe: () => Promise<void>;
 }
 
-const bulletItems = [
-  "Text, memory items, embeddings, images, and voice blobs are stored on-device in IndexedDB by default.",
-  "Cloud inference is optional and only active when you enable it and provide an API key.",
-  "Raw media deletion is configurable via the retention days setting.",
-  "Secrets in browser state are vulnerable if your device or browser profile is compromised.",
-];
+/** True when running inside Capacitor's native shell (iOS/Android). */
+const isNativeApp = typeof window !== "undefined" && !!(window as unknown as Record<string, unknown>).Capacitor;
+
+const bulletItems = isNativeApp
+  ? [
+      "All data is stored locally on your device within the app's private container.",
+      "Cloud inference is optional and only active when you enable it and provide an API key.",
+      "Raw media deletion is configurable via the retention days setting.",
+      "API keys are stored in the app's local storage and are never sent to third parties other than the respective AI provider.",
+    ]
+  : [
+      "Text, memory items, embeddings, images, and voice blobs are stored on-device in IndexedDB by default.",
+      "Cloud inference is optional and only active when you enable it and provide an API key.",
+      "Raw media deletion is configurable via the retention days setting.",
+      "Secrets in browser state are vulnerable if your device or browser profile is compromised.",
+    ];
 
 export function PrivacyPanel({ settings, onAfterWipe }: PrivacyPanelProps) {
   const [storageEst, setStorageEst] = useState<StorageEstimate | null>(null);
@@ -91,24 +101,28 @@ export function PrivacyPanel({ settings, onAfterWipe }: PrivacyPanelProps) {
           <TriangleAlert size={17} className="text-[#FF9500] shrink-0 mt-[2px]" />
           <div>
             <p className="text-[15px] font-semibold text-ios-label leading-snug mb-1">
-              Removing the app deletes all data
+              {isNativeApp ? "Uninstalling the app deletes all data" : "Removing the app deletes all data"}
             </p>
             <p className="text-[13px] text-ios-gray-1 leading-relaxed">
-              On iOS, deleting MeCo.AI from your home screen permanently erases all memories, chat history, and settings from this device. There is no recovery. Export your data first.
+              {isNativeApp
+                ? "Uninstalling MeCo AI permanently erases all memories, chat history, and settings. There is no recovery. Export your data first."
+                : "On iOS, deleting MeCo.AI from your home screen permanently erases all memories, chat history, and settings from this device. There is no recovery. Export your data first."}
             </p>
           </div>
         </div>
-        <div className="flex items-start gap-3 px-4 py-3">
-          <TriangleAlert size={17} className="text-[#FF9500] shrink-0 mt-[2px]" />
-          <div>
-            <p className="text-[15px] font-semibold text-ios-label leading-snug mb-1">
-              Clearing browser storage wipes everything
-            </p>
-            <p className="text-[13px] text-ios-gray-1 leading-relaxed">
-              Using "Clear history", "Clear website data", or resetting your browser will delete all stored memories. This includes Safari's Settings → Safari → Clear History and Website Data.
-            </p>
+        {!isNativeApp && (
+          <div className="flex items-start gap-3 px-4 py-3">
+            <TriangleAlert size={17} className="text-[#FF9500] shrink-0 mt-[2px]" />
+            <div>
+              <p className="text-[15px] font-semibold text-ios-label leading-snug mb-1">
+                Clearing browser storage wipes everything
+              </p>
+              <p className="text-[13px] text-ios-gray-1 leading-relaxed">
+                Using "Clear history", "Clear website data", or resetting your browser will delete all stored memories. This includes Safari's Settings → Safari → Clear History and Website Data.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex items-start gap-3 px-4 py-3">
           <TriangleAlert size={17} className="text-[#FF9500] shrink-0 mt-[2px]" />
           <div>
@@ -135,19 +149,24 @@ export function PrivacyPanel({ settings, onAfterWipe }: PrivacyPanelProps) {
               <span className="text-[15px] text-ios-gray-1">{storageEst.usedMB} MB of {storageEst.quotaMB} MB ({storageEst.percentUsed}%)</span>
             </div>
             <div className="flex items-center gap-3 px-4 py-3 border-t border-ios-sep">
-              {storageEst.persisted
+              {(storageEst.persisted || isNativeApp)
                 ? <ShieldCheck size={18} className="text-ios-green shrink-0" />
                 : <ShieldAlert size={18} className="text-[#FF9500] shrink-0" />}
               <div className="flex-1">
                 <p className="text-[17px] text-ios-label">Persistent storage</p>
-                {!storageEst.persisted && (
+                {!storageEst.persisted && !isNativeApp && (
                   <p className="text-[12px] text-[#FF9500] leading-snug mt-[2px]">
                     Not granted — data may be evicted by the browser. Install as a PWA to protect it.
                   </p>
                 )}
+                {isNativeApp && (
+                  <p className="text-[12px] text-ios-green leading-snug mt-[2px]">
+                    App storage is managed by iOS and protected from eviction.
+                  </p>
+                )}
               </div>
-              <span className={cn("text-[15px] font-medium", storageEst.persisted ? "text-ios-green" : "text-[#FF9500]")}>
-                {storageEst.persisted ? "Yes" : "No"}
+              <span className={cn("text-[15px] font-medium", (storageEst.persisted || isNativeApp) ? "text-ios-green" : "text-[#FF9500]")}>
+                {(storageEst.persisted || isNativeApp) ? "Yes" : "No"}
               </span>
             </div>
           </div>
