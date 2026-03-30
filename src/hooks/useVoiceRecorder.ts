@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 function getSupportedMimeType(): string {
   const candidates = [
@@ -17,10 +17,15 @@ function getSupportedMimeType(): string {
 
 export interface VoiceRecorderResult {
   isRecording: boolean;
-  elapsed: number;        // seconds since recording started
-  audioLevel: number;     // 0–1 normalised RMS level
+  isPaused: boolean;
+  elapsed: number;
+  audioLevel: number;
+  analyserNode: AnalyserNode | null;
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<Blob | null>;
+  pauseRecording: () => void;
+  resumeRecording: () => void;
+  discardRecording: () => void;
 }
 
 export function useVoiceRecorder(): VoiceRecorderResult {
@@ -30,21 +35,33 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef<number>(0);
+  const accumulatedMsRef = useRef<number>(0);
+  const lastResumeRef = useRef<number>(0);
 
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
-  function stopAnalysis(): void {
-    if (animFrameRef.current !== null) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
+  function stopTimer(): void {
     if (timerRef.current !== null) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }
+
+  function stopAnimFrame(): void {
+    if (animFrameRef.current !== null) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+  }
+
+  function cleanupAudio(): void {
+    stopAnimFrame();
+    stopTimer();
+    setAnalyserNode(null);
     analyserRef.current = null;
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => undefined);
@@ -52,6 +69,25 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     }
     setAudioLevel(0);
     setElapsed(0);
+    accumulatedMsRef.current = 0;
+    lastResumeRef.current = 0;
+  }
+
+  function releaseStream(): void {
+    const recorder = recorderRef.current;
+    if (recorder?.stream) {
+      recorder.stream.getTracks().forEach((t) => t.stop());
+    }
+    recorderRef.current = null;
+    chunksRef.current = [];
+  }
+
+  function startElapsedTimer(): void {
+    lastResumeRef.current = Date.now();
+    timerRef.current = setInterval(() => {
+      const total = accumulatedMsRef.current + (Date.now() - lastResumeRef.current);
+      setElapsed(Math.floor(total / 1000));
+    }, 250);
   }
 
   async function startRecording(): Promise<void> {
@@ -60,12 +96,13 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     recorderRef.current = recorder;
     chunksRef.current = [];
+    accumulatedMsRef.current = 0;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data);
     };
 
-    // Audio level via AnalyserNode
+    // Audio analysis via AnalyserNode
     try {
       const ctx = new AudioContext();
       audioCtxRef.current = ctx;
@@ -74,6 +111,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       analyser.fftSize = 256;
       source.connect(analyser);
       analyserRef.current = analyser;
+      setAnalyserNode(analyser);
 
       const data = new Uint8Array(analyser.frequencyBinCount);
       function tick(): void {
@@ -87,34 +125,105 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       // AnalyserNode is best-effort; recording still works without it
     }
 
-    // Elapsed-seconds timer
-    startTimeRef.current = Date.now();
-    timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
-    }, 500);
-
-    recorder.start(200); // collect data every 200 ms for a reliable blob
+    startElapsedTimer();
+    recorder.start(200);
     setIsRecording(true);
+    setIsPaused(false);
   }
+
+  const pauseRecording = useCallback((): void => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "recording") return;
+
+    // Feature-detect pause support
+    if (typeof recorder.pause === "function") {
+      recorder.pause();
+    }
+
+    // Accumulate elapsed time
+    accumulatedMsRef.current += Date.now() - lastResumeRef.current;
+    stopTimer();
+    stopAnimFrame();
+    setAudioLevel(0);
+    setIsPaused(true);
+  }, []);
+
+  const resumeRecording = useCallback((): void => {
+    const recorder = recorderRef.current;
+    if (!recorder) return;
+
+    if (typeof recorder.resume === "function" && recorder.state === "paused") {
+      recorder.resume();
+    }
+
+    // Restart animation frame for waveform
+    const analyser = analyserRef.current;
+    if (analyser) {
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const node = analyser; // capture non-null reference
+      function tick(): void {
+        node.getByteFrequencyData(data);
+        const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length) / 128;
+        setAudioLevel(Math.min(rms, 1));
+        animFrameRef.current = requestAnimationFrame(tick);
+      }
+      tick();
+    }
+
+    startElapsedTimer();
+    setIsPaused(false);
+  }, []);
 
   async function stopRecording(): Promise<Blob | null> {
     const recorder = recorderRef.current;
-    stopAnalysis();
+    cleanupAudio();
     if (!recorder) return null;
 
     return new Promise((resolve) => {
       recorder.onstop = () => {
         const mimeType = recorder.mimeType || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        recorder.stream.getTracks().forEach((t) => t.stop());
-        recorderRef.current = null;
-        chunksRef.current = [];
+        releaseStream();
         setIsRecording(false);
+        setIsPaused(false);
         resolve(blob.size > 0 ? blob : null);
       };
-      recorder.stop();
+      if (recorder.state !== "inactive") {
+        recorder.stop();
+      } else {
+        releaseStream();
+        setIsRecording(false);
+        setIsPaused(false);
+        resolve(null);
+      }
     });
   }
 
-  return { isRecording, elapsed, audioLevel, startRecording, stopRecording };
+  const discardRecording = useCallback((): void => {
+    const recorder = recorderRef.current;
+    cleanupAudio();
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = () => {
+        releaseStream();
+      };
+      recorder.stop();
+    } else {
+      releaseStream();
+    }
+    setIsRecording(false);
+    setIsPaused(false);
+  }, []);
+
+  return {
+    isRecording,
+    isPaused,
+    elapsed,
+    audioLevel,
+    analyserNode,
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    discardRecording,
+  };
 }
