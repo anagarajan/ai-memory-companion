@@ -21,6 +21,10 @@ export interface EmbeddingProvider {
 
 export interface ReasoningProvider {
   answer(question: string, context: string[], settings: AppSettings): Promise<string>;
+  /** Generate a hypothetical memory that would answer the question (HyDE). */
+  generateHypotheticalAnswer(question: string, settings: AppSettings): Promise<string>;
+  /** Score each candidate memory's relevance to the question (0–10). Returns scores in same order as candidates. */
+  rerankCandidates(question: string, candidates: string[], settings: AppSettings): Promise<number[]>;
 }
 
 export interface MemoryExtractionProvider {

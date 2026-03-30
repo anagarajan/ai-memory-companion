@@ -71,6 +71,69 @@ export class OpenAIReasoningProvider implements ReasoningProvider {
 
     return result.choices[0]?.message.content?.trim() ?? "";
   }
+
+  async generateHypotheticalAnswer(question: string, settings: AppSettings): Promise<string> {
+    const apiKey = settings.openai_api_key;
+    if (!apiKey) throw new Error("Missing OpenAI API key");
+
+    const result = await openAiFetch<{ choices: Array<{ message: { content: string } }> }>(
+      "chat/completions",
+      apiKey,
+      {
+        model: settings.openai_model,
+        max_tokens: 100,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a personal memory assistant. Given a question, write a short factual statement (1-2 sentences) that would be the ideal memory entry answering it. Write it as a stored fact, not as a question or explanation. Be specific and concise.",
+          },
+          { role: "user", content: question },
+        ],
+      },
+    );
+
+    return result.choices[0]?.message.content?.trim() ?? question;
+  }
+
+  async rerankCandidates(question: string, candidates: string[], settings: AppSettings): Promise<number[]> {
+    const apiKey = settings.openai_api_key;
+    if (!apiKey) throw new Error("Missing OpenAI API key");
+
+    const numbered = candidates.map((c, i) => `${i + 1}. ${c}`).join("\n");
+
+    const result = await openAiFetch<{ choices: Array<{ message: { content: string } }> }>(
+      "chat/completions",
+      apiKey,
+      {
+        model: settings.openai_model,
+        max_tokens: 100,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a relevance scorer. Given a question and candidate memories, rate each memory's relevance to the question on a scale of 0-10 (10 = perfect answer, 0 = completely irrelevant). Respond with ONLY a JSON array of numbers in the same order as the candidates. Example: [8, 3, 6]",
+          },
+          {
+            role: "user",
+            content: `Question: ${question}\n\nCandidate memories:\n${numbered}`,
+          },
+        ],
+      },
+    );
+
+    const raw = result.choices[0]?.message.content?.trim() ?? "[]";
+    try {
+      const scores = JSON.parse(raw) as unknown;
+      if (Array.isArray(scores) && scores.length === candidates.length) {
+        return scores.map((s) => Math.min(10, Math.max(0, Number(s) || 0)));
+      }
+    } catch {
+      // Parse failure — fall through
+    }
+    // Fallback: return neutral scores so original ranking is preserved
+    return candidates.map(() => 5);
+  }
 }
 
 export class OpenAITranscriptionProvider implements TranscriptionProvider {
@@ -99,7 +162,12 @@ export class OpenAIImageExtractionProvider implements ImageExtractionProvider {
     if (!apiKey) throw new Error("Missing OpenAI API key");
 
     const buffer = await blob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const uint8 = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < uint8.length; i += 8192) {
+      binary += String.fromCharCode(...uint8.subarray(i, i + 8192));
+    }
+    const base64 = btoa(binary);
     const result = await openAiFetch<{ choices: Array<{ message: { content: string } }> }>(
       "chat/completions",
       apiKey,
