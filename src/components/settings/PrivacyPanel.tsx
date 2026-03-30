@@ -28,6 +28,7 @@ const bulletItems = isNativeApp
 
 export function PrivacyPanel({ settings, onAfterWipe }: PrivacyPanelProps) {
   const [storageEst, setStorageEst] = useState<StorageEstimate | null>(null);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [importState, setImportState] = useState<"idle" | "importing" | "done" | "error">("idle");
   const [importMsg, setImportMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -234,16 +235,36 @@ export function PrivacyPanel({ settings, onAfterWipe }: PrivacyPanelProps) {
         Legal
       </p>
       <div className="rounded-ios-xl overflow-hidden border border-ios-sep bg-ios-surface">
-        <a
-          href="/privacy-policy.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full flex items-center gap-3 px-4 py-3 text-left bg-transparent no-underline hover:bg-ios-gray-6/50 transition-colors"
+        <button
+          type="button"
+          onClick={() => setShowPrivacyPolicy(true)}
+          className="w-full flex items-center gap-3 px-4 py-3 text-left bg-transparent border-0 hover:bg-ios-gray-6/50 transition-colors"
         >
           <FileText size={18} className="text-ios-purple shrink-0" />
           <span className="text-[17px] text-ios-purple flex-1">Privacy Policy</span>
-        </a>
+        </button>
       </div>
+
+      {/* Privacy Policy modal */}
+      {showPrivacyPolicy && (
+        <div className="fixed inset-0 z-50 bg-ios-bg flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-ios-sep bg-ios-surface">
+            <span className="text-[17px] font-semibold text-ios-label">Privacy Policy</span>
+            <button
+              type="button"
+              onClick={() => setShowPrivacyPolicy(false)}
+              className="text-[17px] text-ios-purple font-medium bg-transparent border-0"
+            >
+              Done
+            </button>
+          </div>
+          <iframe
+            src="/privacy-policy.html"
+            title="Privacy Policy"
+            className="flex-1 w-full border-0"
+          />
+        </div>
+      )}
     </div>
   );
 }
