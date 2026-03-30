@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head><title>MeCo AI Icon Generator</title></head>
+<body>
+<canvas id="c" width="1024" height="1024"></canvas>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const s = 1024;
+
+// Background — rounded rect with gradient
+const r = 220; // corner radius
+ctx.beginPath();
+ctx.moveTo(r, 0);
+ctx.lineTo(s - r, 0);
+ctx.quadraticCurveTo(s, 0, s, r);
+ctx.lineTo(s, s - r);
+ctx.quadraticCurveTo(s, s, s - r, s);
+ctx.lineTo(r, s);
+ctx.quadraticCurveTo(0, s, 0, s - r);
+ctx.lineTo(0, r);
+ctx.quadraticCurveTo(0, 0, r, 0);
+ctx.closePath();
+
+const grad = ctx.createLinearGradient(0, 0, s, s);
+grad.addColorStop(0, '#6C63FF');   // purple-blue
+grad.addColorStop(1, '#4834D4');   // deeper purple
+ctx.fillStyle = grad;
+ctx.fill();
+
+// Subtle inner glow
+const innerGrad = ctx.createRadialGradient(s*0.35, s*0.3, 0, s*0.5, s*0.5, s*0.7);
+innerGrad.addColorStop(0, 'rgba(255,255,255,0.15)');
+innerGrad.addColorStop(1, 'rgba(255,255,255,0)');
+ctx.fillStyle = innerGrad;
+ctx.fill();
+
+// Brain/memory icon — stylized thought bubble
+ctx.save();
+ctx.translate(s/2, s*0.42);
+
+// Main circle (head/brain)
+ctx.beginPath();
+ctx.arc(0, 0, 220, 0, Math.PI * 2);
+ctx.fillStyle = 'rgba(255,255,255,0.95)';
+ctx.fill();
+
+// Smaller circles forming thought bubble trail
+ctx.beginPath();
+ctx.arc(-120, 200, 55, 0, Math.PI * 2);
+ctx.fill();
+
+ctx.beginPath();
+ctx.arc(-195, 280, 30, 0, Math.PI * 2);
+ctx.fill();
+
+// Neural/sparkle dots inside the brain
+const dots = [
+  [0, -60, 18], [-70, 20, 14], [70, 20, 14],
+  [-35, -90, 10], [35, -90, 10], [0, 60, 12],
+  [-90, -40, 8], [90, -40, 8],
+];
+dots.forEach(([x, y, r]) => {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#5856D6';
+  ctx.fill();
+});
+
+// Connection lines between dots
+ctx.strokeStyle = '#5856D6';
+ctx.lineWidth = 3;
+ctx.globalAlpha = 0.5;
+const connections = [
+  [0,1], [0,2], [0,5], [1,3], [2,4], [3,4], [1,6], [2,7]
+];
+connections.forEach(([a, b]) => {
+  ctx.beginPath();
+  ctx.moveTo(dots[a][0], dots[a][1]);
+  ctx.lineTo(dots[b][0], dots[b][1]);
+  ctx.stroke();
+});
+ctx.globalAlpha = 1;
+
+ctx.restore();
+
+// "MeCo" text at bottom
+ctx.fillStyle = 'rgba(255,255,255,0.95)';
+ctx.font = 'bold 120px -apple-system, SF Pro Display, sans-serif';
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+ctx.fillText('MeCo', s/2, s*0.82);
+
+// Small "AI" badge
+ctx.font = 'bold 56px -apple-system, SF Pro Display, sans-serif';
+ctx.fillStyle = 'rgba(255,255,255,0.7)';
+ctx.fillText('AI', s/2, s*0.91);
+
+// Download link
+const link = document.createElement('a');
+link.download = 'AppIcon-1024.png';
+link.href = c.toDataURL('image/png');
+link.textContent = 'Download Icon (1024x1024)';
+link.style.cssText = 'display:block;margin:20px;font-size:20px;';
+document.body.appendChild(link);
+
+document.title = 'Right-click canvas → Save Image, or click link below';
+</script>
+</body>
+</html>
